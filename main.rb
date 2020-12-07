@@ -12,11 +12,19 @@ output_filename = ENV['OUTPUT_FILENAME']
 localdb_user = ENV['LOCAL_DATABASE_USERNAME']
 localdb_pass = ENV['LOCAL_DATABASE_PASSWORD']
 
-result = `mysqldump -u #{username} --password=#{password} #{database} -h #{hostname} --ssl-mode=disabled > #{output_filename}`
-
 time = Time.now.strftime("%Y%m%d_%H%M")
 tmp_dbname = "tmp_db_#{time}"
 
-res = `mysql -u #{localdb_user} --password=#{localdb_pass} -e "CREATE DATABASE #{tmp_dbname}"`
 
+def execute(command)
+  puts "Command will be executed:"
+  puts command
+  `#{command}`
+end
 
+# do the things:
+result = execute("mysqldump -u #{username} --password=#{password} #{database} -h #{hostname} --ssl-mode=disabled > #{output_filename}")
+
+res = execute("mysql -u #{localdb_user} --password=#{localdb_pass} -e 'CREATE DATABASE #{tmp_dbname}'")
+
+res = execute("mysql -u #{localdb_user} --password=#{localdb_pass} #{tmp_dbname} < #{output_filename}")
