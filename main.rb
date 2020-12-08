@@ -17,15 +17,12 @@ def execute(command)
 end
 
 class Replacer
-  def initialize(host, dbname, user, pass)
-    @localdb_host = host
-    @localdb_name = dbname
-    @localdb_user = user
-    @localdb_pass = pass
+  def initialize(dbconfig)
+    @dbconfig = dbconfig
   end
 
   def proceed(from, to)
-    execute("./bin/srdb.cli.php --host=#{@localdb_host} --name=#{@localdb_name} --user=#{@localdb_user} --pass=#{@localdb_pass} --search='#{from}' --replace='#{to}'")
+    execute("./bin/srdb.cli.php --host=#{@dbconfig.hostname} --name=#{@dbconfig.name} --user=#{@dbconfig.username} --pass=#{@dbconfig.password} --search='#{from}' --replace='#{to}'")
   end
 end
 
@@ -35,61 +32,78 @@ def create_tmp_dir
   end
 end
 
+class DBConfig
+  def initialize(opts={})
+    @name = opts.fetch(:name)
+    @hostname = opts.fetch(:hostname)
+    @username = opts.fetch(:username)
+    @password = opts.fetch(:password)
+  end
+
+  attr_reader :name, :hostname, :username, :password
+end
+
 class DB
-  def initialize(source_opts={}, local_opts={})
-    @source_dbname = source_opts.fetch(:dbname)
-    @source_hostname = source_opts.fetch(:hostname)
-    @source_username = source_opts.fetch(:username)
-    @source_password = source_opts.fetch(:password)
+  def initialize(sourcedb, localdb, destdb=nil)
+    @sourcedb = sourcedb
+    @localdb = localdb
+    @replacer = Replacer.new(@localdb)
 
-    @tmp_hostname = "localhost"
-    @tmp_dbname = LOCAL_DB_NAME
-    @tmp_dbuser = local_opts.fetch(:username)
-    @tmp_dbpass = local_opts.fetch(:password)
+    @destdb = destdb
 
-    @replacer = Replacer.new(@tmp_hostname, @tmp_dbname, @tmp_dbuser, @tmp_dbpass)
   end
 
   def import_remote_to_tmp(filename=nil)
     if filename.nil?
       filename = tmp_filename
     end
-    execute("mysqldump -u #{@source_username} --password=#{@source_password} #{@source_dbname} -h #{@source_hostname} --ssl-mode=disabled > #{filename}")
-    execute("mysql -u #{@tmp_dbuser} --password=#{@tmp_dbpass} -e 'CREATE DATABASE #{@tmp_dbname}'")
-    execute("mysql -u #{@tmp_dbuser} --password=#{@tmp_dbpass} #{@tmp_dbname} < #{filename}")
+    execute("mysqldump -u #{@sourcedb.username} --password=#{@sourcedb.password} #{@sourcedb.name} -h #{@sourcedb.hostname} --ssl-mode=disabled > #{filename}")
+    execute("mysql -u #{@localdb.username} --password=#{@localdb.password} -e 'CREATE DATABASE #{@localdb.name}'")
+    execute("mysql -u #{@localdb.username} --password=#{@localdb.password} #{@localdb.name} < #{filename}")
   end
 
   def dump(export_name=nil)
     if export_name.nil?
       export_name = "export.#{Time.now.strftime("%Y%m%d_%H%M")}.sql"
     end
-    execute("mysqldump -u #{@tmp_dbuser} --password=#{@tmp_dbpass} #{@tmp_dbname} -h #{@tmp_hostname} > #{export_name}")
+    execute("mysqldump -u #{@localdb.username} --password=#{@localdb.password} #{@localdb.name} -h #{@localdb.hostname} > #{export_name}")
   end
 
   def search_and_replace(from, to)
     @replacer.proceed(from, to)
   end
+
+  def export(db)
+
+  end
 end
 
 require 'dotenv/load' # loads the .env file it finds
 
-source_database = ENV['SOURCE_DATABASE_NAME']
-source_username = ENV['SOURCE_DATABASE_USERNAME']
-source_password = ENV['SOURCE_DATABASE_PASSWORD']
-source_hostname = ENV['SOURCE_DATABASE_HOSTNAME']
-# For temp db to search and replace stuff:
-localdb_user = ENV['LOCAL_DATABASE_USERNAME']
-localdb_pass = ENV['LOCAL_DATABASE_PASSWORD']
-localdb_host = 'localhost'
-# For destination db into which we will import the db:
-dest_database = ENV['DEST_DATABASE_NAME']
-dest_username = ENV['DEST_DATABASE_USERNAME']
-dest_password = ENV['DEST_DATABASE_PASSWORD']
-dest_hostname = ENV['DEST_DATABASE_HOSTNAME']
+sourcedb = DBConfig.new(
+  name: ENV['SOURCE_DATABASE_NAME'],
+  hostname: ENV['SOURCE_DATABASE_HOSTNAME'],
+  username: ENV['SOURCE_DATABASE_USERNAME'],
+  password: ENV['SOURCE_DATABASE_PASSWORD'],
+)
+
+localdb = DBConfig.new(
+  name: LOCAL_DB_NAME,
+  hostname: 'localhost',
+  username: ENV['LOCAL_DATABASE_USERNAME'],
+  password: ENV['LOCAL_DATABASE_PASSWORD'],
+)
+
+destdb = DBConfig.new(
+  name: ENV['DEST_DATABASE_NAME'],
+  hostname: ENV['DEST_DATABASE_HOSTNAME'],
+  username: ENV['DEST_DATABASE_USERNAME'],
+  password: ENV['DEST_DATABASE_PASSWORD'],
+)
 
 db = DB.new(
-  {dbname: source_database, hostname: source_hostname, username: source_username, password: source_password},
-  {username: localdb_user, password: localdb_pass}
+  sourcedb,
+  localdb
 )
 
 res = execute("mysql -u #{localdb_user} --password=#{localdb_pass} -e 'CREATE DATABASE #{tmp_dbname}'")
