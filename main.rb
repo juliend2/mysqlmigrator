@@ -44,13 +44,10 @@ class DBConfig
 end
 
 class DB
-  def initialize(sourcedb, localdb, destdb=nil)
+  def initialize(sourcedb, localdb)
     @sourcedb = sourcedb
     @localdb = localdb
     @replacer = Replacer.new(@localdb)
-
-    @destdb = destdb
-
   end
 
   def import_remote_to_tmp(filename=nil)
@@ -73,8 +70,9 @@ class DB
     @replacer.proceed(from, to)
   end
 
-  def export(db)
-
+  def import(dump, opts={})
+    destdb = opts.fetch(:to)
+    execute("mysql -u #{destdb.username} --password=#{destdb.password} -h #{destdb.hostname} #{destdb.name} < #{dump}")
   end
 end
 
