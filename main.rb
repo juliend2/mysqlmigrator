@@ -1,5 +1,6 @@
-# execute like this:
-# ruby main.rb
+# Execute like this:
+#
+# bundle exec ruby main.rb
 
 TIMESTRING = Time.now.strftime("%Y%m%d_%H%M")
 LOCAL_DB_NAME = "tmp_db_#{TIMESTRING}"
