@@ -3,10 +3,10 @@
 
 require 'dotenv/load' # loads the .env file it finds
 
-database = ENV['DATABASE_NAME']
-username = ENV['DATABASE_USERNAME']
-password = ENV['DATABASE_PASSWORD']
-hostname = ENV['DATABASE_HOSTNAME']
+database = ENV['SOURCE_DATABASE_NAME']
+username = ENV['SOURCE_DATABASE_USERNAME']
+password = ENV['SOURCE_DATABASE_PASSWORD']
+hostname = ENV['SOURCE_DATABASE_HOSTNAME']
 output_filename = ENV['OUTPUT_FILENAME']
 # For temp db to search and replace stuff:
 localdb_user = ENV['LOCAL_DATABASE_USERNAME']
