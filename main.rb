@@ -11,10 +11,12 @@ def tmp_filename
   "#{TMP_FILENAME}.sql"
 end
 
-def execute(command)
-  puts "Command will be executed:"
-  puts command
-  `#{command}`
+module Syscalls
+  def execute(command)
+    puts "Command will be executed:"
+    puts command
+    `#{command}`
+  end
 end
 
 class Replacer
@@ -44,7 +46,61 @@ class DBConfig
   attr_reader :name, :hostname, :username, :password
 end
 
+class Dump
+  include Syscalls
+
+  def initialize(file_path)
+    @file_path = file_path
+  end
+
+  def to_s
+    @file_path
+  end
+end
+
 class DB
+  include Syscalls
+
+  def initialize(opts={})
+    @config = DBConfig.new opts
+  end
+
+  def <<(db_or_dump)
+    if db_or_dump.class == Dump
+      import_dump(db_or_dump)
+    elsif db_or_dump.class == DB
+      import_db(db_or_dump)
+    else
+      raise "Unknown data type to import."
+    end
+  end
+
+  def dump(file_name)
+    d = Dump.new(file_name)
+
+  end
+
+  private
+
+  def import_dump(dump)
+
+  end
+
+  def import_db(db)
+
+  end
+end
+
+class TmpDB < DB
+  def initialize(opts={})
+    opts[:name] = opts.fetch(:name, LOCAL_DB_NAME)
+    opts[:hostname] = opts.fetch(:hostname, 'localhost')
+    super(opts)
+    execute("mysql -u #{@config.username} --password=#{@config.password} -h #{@config.hostname} -e 'CREATE DATABASE #{@config.name}'")
+  end
+end
+
+class DBController
   def initialize(sourcedb, localdb)
     @sourcedb = sourcedb
     @localdb = localdb
@@ -79,21 +135,19 @@ end
 
 require 'dotenv/load' # loads the .env file it finds
 
-sourcedb = DBConfig.new(
+sourcedb = DB.new(
   name: ENV['SOURCE_DATABASE_NAME'],
   hostname: ENV['SOURCE_DATABASE_HOSTNAME'],
   username: ENV['SOURCE_DATABASE_USERNAME'],
   password: ENV['SOURCE_DATABASE_PASSWORD'],
 )
 
-localdb = DBConfig.new(
-  name: LOCAL_DB_NAME,
-  hostname: 'localhost',
+localdb = TmpDB.new(
   username: ENV['LOCAL_DATABASE_USERNAME'],
   password: ENV['LOCAL_DATABASE_PASSWORD'],
 )
 
-destdb = DBConfig.new(
+destdb = DB.new(
   name: ENV['DEST_DATABASE_NAME'],
   hostname: ENV['DEST_DATABASE_HOSTNAME'],
   username: ENV['DEST_DATABASE_USERNAME'],

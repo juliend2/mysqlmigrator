@@ -1,5 +1,8 @@
 # mysql migrator
 
+Uses https://github.com/interconnectit/Search-Replace-DB for search & replace
+in database (GPLv3)
+
 ## dependencies:
 
 - ruby
@@ -18,3 +21,4 @@ bundle install
 ```
 bundle exec ruby main.rb
 ```
+
