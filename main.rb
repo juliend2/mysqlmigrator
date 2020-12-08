@@ -2,7 +2,9 @@
 #
 # bundle exec ruby main.rb
 
-TIMESTRING = Time.now.strftime("%Y%m%d_%H%M")
+require 'forwardable'
+
+TIMESTRING = Time.now.strftime("%Y%m%d_%H%M%S")
 LOCAL_DB_NAME = "tmp_db_#{TIMESTRING}"
 TMP_FILENAME = "tmp/#{TIMESTRING}"
 
@@ -60,15 +62,20 @@ end
 
 class DB
   include Syscalls
+  extend Forwardable
 
   def initialize(opts={})
     @config = DBConfig.new opts
+    @tmp_filename = "#{srand}.sql"
+    @tmp_filepath = "tmp/#{@tmp_filename}"
   end
 
+  def_delegators :@config, :name, :username, :password, :hostname
+
   def <<(db_or_dump)
-    if db_or_dump.class == Dump
+    if db_or_dump.is_a?(Dump)
       import_dump(db_or_dump)
-    elsif db_or_dump.class == DB
+    elsif db_or_dump.is_a?(DB)
       import_db(db_or_dump)
     else
       raise "Unknown data type to import."
@@ -77,28 +84,34 @@ class DB
 
   def dump(file_name)
     d = Dump.new(file_name)
-
   end
 
   private
 
+  # Imports the Dump object into the current DB
+  #
+  # dump - behaves like a String in a string context
   def import_dump(dump)
-
+    execute("mysql -u #{self.username} --password=#{self.password} #{self.name} -h #{self.hostname} < #{dump}")
   end
 
   def import_db(db)
-
+    # In two steps, to be able to debug more easily:
+    execute("mysqldump -u #{db.username} --password=#{db.password} #{db.name} -h #{db.hostname} --ssl-mode=disabled > #{@tmp_filepath}")
+    execute("mysql -u #{self.username} --password=#{self.password} #{self.name} -h #{self.hostname} < #{@tmp_filepath}")
   end
 end
+
 
 class TmpDB < DB
   def initialize(opts={})
     opts[:name] = opts.fetch(:name, LOCAL_DB_NAME)
     opts[:hostname] = opts.fetch(:hostname, 'localhost')
     super(opts)
-    execute("mysql -u #{@config.username} --password=#{@config.password} -h #{@config.hostname} -e 'CREATE DATABASE #{@config.name}'")
+    execute("mysql -u #{self.username} --password=#{self.password} -h #{self.hostname} -e 'CREATE DATABASE #{self.name}'")
   end
 end
+
 
 class DBController
   def initialize(sourcedb, localdb)
@@ -154,11 +167,19 @@ destdb = DB.new(
   password: ENV['DEST_DATABASE_PASSWORD'],
 )
 
-db = DB.new(
-  sourcedb,
-  localdb
-)
+# db = DBController.new(
+#   sourcedb,
+#   localdb
+# )
+# 
+# db.import_remote_to_tmp()
+# 
+# db.search_and_replace("https:\/\/www.tythonic.com", "http:\/\/ttthhnncc.tk")
+# db.search_and_replace("https://www.tythonic.com", "http://ttthhnncc.tk")
+# db.search_and_replace("www.tythonic.com", "ttthhnncc.tk")
+# 
+# db.dump("tythonic.sql")
+# 
+# db.import("tythonic.sql", to: destdb)
 
-res = execute("mysql -u #{localdb_user} --password=#{localdb_pass} -e 'CREATE DATABASE #{tmp_dbname}'")
-
-db.dump("tythonic.sql")
+localdb << sourcedb
