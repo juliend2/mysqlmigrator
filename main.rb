@@ -35,7 +35,6 @@ def create_tmp_dir
   end
 end
 
-# do the things:
 class DB
   def initialize(source_opts={}, local_opts={})
     @source_dbname = source_opts.fetch(:dbname)
@@ -82,6 +81,11 @@ source_hostname = ENV['SOURCE_DATABASE_HOSTNAME']
 localdb_user = ENV['LOCAL_DATABASE_USERNAME']
 localdb_pass = ENV['LOCAL_DATABASE_PASSWORD']
 localdb_host = 'localhost'
+# For destination db into which we will import the db:
+dest_database = ENV['DEST_DATABASE_NAME']
+dest_username = ENV['DEST_DATABASE_USERNAME']
+dest_password = ENV['DEST_DATABASE_PASSWORD']
+dest_hostname = ENV['DEST_DATABASE_HOSTNAME']
 
 db = DB.new(
   {dbname: source_database, hostname: source_hostname, username: source_username, password: source_password},
