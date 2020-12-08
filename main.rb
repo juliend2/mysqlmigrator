@@ -15,7 +15,12 @@ localdb_host = 'localhost'
 
 TIMESTRING = Time.now.strftime("%Y%m%d_%H%M")
 LOCAL_DB_NAME = "tmp_db_#{TIMESTRING}"
+TMP_FILENAME = "tmp/#{TIMESTRING}"
 
+def tmp_filename
+  create_tmp_dir
+  "#{TMP_FILENAME}.sql"
+end
 
 def execute(command)
   puts "Command will be executed:"
@@ -36,6 +41,11 @@ class Replacer
   end
 end
 
+def create_tmp_dir
+  unless File.exists?('tmp')
+    Dir.mkdir 'tmp'
+  end
+end
 
 # do the things:
 class DB
@@ -49,10 +59,6 @@ class DB
     @tmp_dbname = LOCAL_DB_NAME
     @tmp_dbuser = local_opts.fetch(:username)
     @tmp_dbpass = local_opts.fetch(:password)
-  end
-
-  def tmp_filename
-    "#{LOCAL_DB_NAME}.sql"
   end
 
   def import_remote_to_tmp()
