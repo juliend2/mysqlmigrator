@@ -87,30 +87,34 @@ end
 
 require 'dotenv/load' # loads the .env file it finds
 
-sourcedb = DB.new(
+sourcedb = DBConfig.new(
   name: ENV['SOURCE_DATABASE_NAME'],
   hostname: ENV['SOURCE_DATABASE_HOSTNAME'],
   username: ENV['SOURCE_DATABASE_USERNAME'],
   password: ENV['SOURCE_DATABASE_PASSWORD'],
 )
 
-localdb = TmpDB.new(
+localdb = DBConfig.new(
+  name: LOCAL_DB_NAME,
+  hostname: 'localhost',
   username: ENV['LOCAL_DATABASE_USERNAME'],
   password: ENV['LOCAL_DATABASE_PASSWORD'],
 )
 
-destdb = DB.new(
+destdb = DBConfig.new(
   name: ENV['DEST_DATABASE_NAME'],
   hostname: ENV['DEST_DATABASE_HOSTNAME'],
   username: ENV['DEST_DATABASE_USERNAME'],
   password: ENV['DEST_DATABASE_PASSWORD'],
 )
 
-# db = DBController.new(
-#   sourcedb,
-#   localdb
-# )
-# 
+db = DB.new(
+  sourcedb,
+  localdb
+)
+
+#res = execute("mysql -u #{localdb_user} --password=#{localdb_pass} -e 'CREATE DATABASE #{tmp_dbname}'")
+
 # db.import_remote_to_tmp()
 # 
 # db.search_and_replace("https:\/\/www.tythonic.com", "http:\/\/ttthhnncc.tk")
