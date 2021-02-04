@@ -2,8 +2,12 @@
 #
 # bundle exec ruby main.rb
 
+require 'dotenv/load'
+
+
 TIMESTRING = Time.now.strftime("%Y%m%d_%H%M")
 LOCAL_DB_NAME = "tmp_db_#{TIMESTRING}"
+LOCAL_DB_HOST = "localhost"
 TMP_FILENAME = "tmp/#{TIMESTRING}"
 
 def tmp_filename
@@ -11,13 +15,17 @@ def tmp_filename
   "#{TMP_FILENAME}.sql"
 end
 
-def execute(command)
-  puts "Command will be executed:"
-  puts command
-  `#{command}`
+module Executable
+  def execute(command_str)
+    puts "Going to execute:"
+    puts command_str
+    `#{command_str}`
+  end
 end
 
 class Replacer
+  include Executable
+
   def initialize(dbconfig)
     @dbconfig = dbconfig
   end
@@ -44,85 +52,127 @@ class DBConfig
   attr_reader :name, :hostname, :username, :password
 end
 
-class DB
-  def initialize(sourcedb, localdb)
-    @sourcedb = sourcedb
-    @localdb = localdb
-    @replacer = Replacer.new(@localdb)
+class Dump
+  include Executable
+
+  def initialize(file_path)
+    @file_path = file_path
   end
 
-  def import_remote_to_tmp()
-		filename = tmp_filename
-    execute("mysqldump -u #{@sourcedb.username} --password=#{@sourcedb.password} #{@sourcedb.name} -h #{@sourcedb.hostname} --ssl-mode=disabled > #{filename}")
-    execute("mysql -u #{@localdb.username} --password=#{@localdb.password} -e 'CREATE DATABASE #{@localdb.name}'")
-		#self.search_replace_in_file('utf8mb4_0900_ai_ci', 'utf8mb4_general_ci')
-    execute("mysql -u #{@localdb.username} --password=#{@localdb.password} #{@localdb.name} < #{filename}")
+  def to_s
+    @file_path
   end
 
-  def search_replace_in_file(search, replace)
-    filename = tmp_filename
-    outdata = File.read(filename).gsub(search, replace)
-
-    File.open(filename, 'w') do |out|
-      out << outdata
+  def <<(db)
+    case db
+    when Database then
+      puts "Importing Database into dump..."
+      execute("mysqldump -u #{db.username} --password=#{db.password} #{db.name} -h #{db.hostname} > #{@file_path}")
+    else
+      raise "Unsupported type"
     end
-  end
-
-  def dump(export_name=nil)
-    if export_name.nil?
-      export_name = "export.#{Time.now.strftime("%Y%m%d_%H%M")}.sql"
-    end
-    execute("mysqldump -u #{@localdb.username} --password=#{@localdb.password} #{@localdb.name} -h #{@localdb.hostname} > #{export_name}")
-  end
-
-  def search_and_replace(from, to)
-    @replacer.proceed(from, to)
-  end
-
-  def import(dump, opts={})
-    destdb = opts.fetch(:to)
-    execute("mysql -u #{destdb.username} --password=#{destdb.password} -h #{destdb.hostname} #{destdb.name} < #{dump}")
   end
 end
 
-require 'dotenv/load' # loads the .env file it finds
+class Database
+  include Executable
 
-sourcedb = DBConfig.new(
-  name: ENV['SOURCE_DATABASE_NAME'],
-  hostname: ENV['SOURCE_DATABASE_HOSTNAME'],
-  username: ENV['SOURCE_DATABASE_USERNAME'],
-  password: ENV['SOURCE_DATABASE_PASSWORD'],
-)
+  def initialize(opts={})
+    @config = DBConfig.new(opts)
+  end
 
-localdb = DBConfig.new(
-  name: LOCAL_DB_NAME,
-  hostname: 'localhost',
+  def name
+    @config.name
+  end
+
+  def username
+    @config.username
+  end
+
+  def password
+    @config.password
+  end
+
+  def hostname
+    @config.hostname
+  end
+
+  def <<(db_or_dump)
+    case db_or_dump
+    when Database then import_db(db_or_dump)
+    when Dump then import_dump(db_or_dump)
+    else raise "Unsupported type"
+    end
+  end
+
+  def >>(db_or_dump)
+    case db_or_dump
+    when String then export_to_dump(Dump.new(db_or_dump))
+    else raise "Unsupported type"
+    end
+  end
+
+  def replace!(from, to)
+    replacer = Replacer.new(@config)
+    replacer.proceed(from, to)
+  end
+
+  protected
+  
+  def import_db(db)
+    puts "importing db..."
+    puts db.inspect
+  end
+
+  def import_dump(dump)
+    puts "importing dump..."
+    execute("mysql -u #{self.username} --password=#{self.password} -h #{self.hostname} #{self.name} < #{dump}")
+  end
+
+  def export_to_dump(dump)
+    dump << self
+  end
+end
+
+class TmpDatabase < Database
+  def initialize(opts={})
+    opts[:name] = LOCAL_DB_NAME
+    opts[:hostname] = LOCAL_DB_HOST
+    super(opts)
+  end
+
+  def import_dump(dump)
+    puts "Creating the tmp DB"
+    execute("mysql -u #{self.username} --password=#{self.password} -e 'CREATE DATABASE #{self.name}'")
+    super(dump)
+  end
+
+end
+
+# sourcedb = Database.new(
+#   name: ENV['SOURCE_DATABASE_NAME'],
+#   hostname: ENV['SOURCE_DATABASE_HOSTNAME'],
+#   username: ENV['SOURCE_DATABASE_USERNAME'],
+#   password: ENV['SOURCE_DATABASE_PASSWORD'],
+# )
+
+
+localdb = TmpDatabase.new(
   username: ENV['LOCAL_DATABASE_USERNAME'],
   password: ENV['LOCAL_DATABASE_PASSWORD'],
 )
 
-destdb = DBConfig.new(
-  name: ENV['DEST_DATABASE_NAME'],
-  hostname: ENV['DEST_DATABASE_HOSTNAME'],
-  username: ENV['DEST_DATABASE_USERNAME'],
-  password: ENV['DEST_DATABASE_PASSWORD'],
-)
+# destdb = Database.new(
+#   name: ENV['DEST_DATABASE_NAME'],
+#   hostname: ENV['DEST_DATABASE_HOSTNAME'],
+#   username: ENV['DEST_DATABASE_USERNAME'],
+#   password: ENV['DEST_DATABASE_PASSWORD'],
+# )
 
-db = DB.new(
-  sourcedb,
-  localdb
-)
+dump = Dump.new('djalbert_wpdb1.sql')
 
-#res = execute("mysql -u #{localdb_user} --password=#{localdb_pass} -e 'CREATE DATABASE #{tmp_dbname}'")
+localdb << dump
 
-# db.import_remote_to_tmp()
-# 
-# db.search_and_replace("https:\/\/www.tythonic.com", "http:\/\/ttthhnncc.tk")
-# db.search_and_replace("https://www.tythonic.com", "http://ttthhnncc.tk")
-# db.search_and_replace("www.tythonic.com", "ttthhnncc.tk")
-# 
-# db.dump("tythonic.sql")
-# 
-# db.import("tythonic.sql", to: destdb)
+localdb.replace! "davidjalbert.com", "staging.davidjalbert.com"
 
-localdb << sourcedb
+localdb >> "djalbert_staging.sql"
